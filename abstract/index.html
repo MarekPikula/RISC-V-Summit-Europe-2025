@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang='en-US' xml:lang='en-US'>
+  <head><title>Enabling RISC-V CI in Open-Source Projects:
+    Challenges and Solutions</title>
+    <meta charset='utf-8' />
+    <meta content='TeX4ht (https://tug.org/tex4ht/)' name='generator' />
+    <meta content='width=device-width,initial-scale=1' name='viewport' />
+    <link href='abstract.css' rel='stylesheet' type='text/css' />
+    <meta content='abstract.tex' name='src' />
+    <script>window.MathJax = { tex: { tags: "ams", }, }; </script>
+    <script async='async' id='MathJax-script' src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js' type='text/javascript'></script>
+  </head><body>
+    <div class='maketitle'>
+
+
+
+
+      <h2 class='titleHead'>Enabling RISC-V CI in Open-Source Projects:
+        Challenges and Solutions</h2>
+      <div class='author'><span class='ecrm-1200'>Marek Pikuła</span><sup class='textsuperscript'><span class='ecrm-0900'>1</span></sup> </div><br />
+      <div class='date'><sup class='textsuperscript'><span class='ecbx-0900'>1</span></sup><span class='ecrm-0800'>(Samsung R&amp;D Institute Poland)</span></div>
+      <section class='abstract' role='doc-abstract'>
+        <h3 class='abstracttitle'><span class='ecbx-1000'>Abstract</span></h3>
+        <span class='ecti-0900'>The adoption of RISC-V as a viable architecture for open-source software development is gaining traction.
+          However, a major challenge remains: ensuring continuous integration (CI) support for RISC-V in upstream
+          projects.  At  Samsung  R&amp;D  Institute  Poland,  we  addressed  this  issue  by  enabling  RISC-V  CI  for  several
+          Freedesktop.org (FDO) projects, including Pixman and GStreamer Orc, and we are currently extending our
+          work to the Opus codec. This work presents our approach to enabling RISC-V CI in FDO projects, addressing
+          the challenges of testing architecture-specific optimizations without native hardware support. We detail our
+          implementation of Docker-based GitLab runners with QEMU emulation, enabling automated multi-architecture
+          testing while minimizing infrastructure overhead. Our work not only enhances software quality by enabling
+          automated testing for RISC-V but also provides a framework for future contributions to seamlessly integrate
+          RISC-V into open-source CI ecosystems.</span>
+      </section>
+    </div>
+    <h3 class='sectionHead'><a id='x1-1000'></a>Introduction</h3>
+<!-- l. 76 --><p class='noindent'>The RISC-V ecosystem has seen rapid expansion, yet
+      upstream open-source projects often lack Continuous
+      Integration (CI) support for this architecture. Many
+      projects primarily test on x86 and ARM due to limited
+      infrastructure availability. This lack of CI resources
+      prevents maintainers from validating RISC-V-specific
+      optimizations, creating a barrier to broader adoption.
+    </p><!-- l. 78 --><p class='indent'>  This limitation became evident when integrating RISC-V
+      Vector extension (RVV) support into the Pixman library.
+      Without access to RISC-V hardware, maintainers
+      faced difficulties in validating the implementation. To
+      address this, we collaborated with Freedesktop.org
+      (FDO) CI maintainers to develop an efficient testing
+      workflow that verifies architecture-specific backends
+      without overwhelming limited CI resources. We are
+      also in the process of extending our approach to
+      additional projects, including GStreamer Orc and
+      Opus.
+    </p><!-- l. 80 --><p class='noindent'>                                                 </p>
+    <h3 class='sectionHead'><a id='x1-2000'></a>Overview of Targeted Libraries</h3>
+   <!-- l. 82 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-3000'></a>Pixman</h4>
+   <!-- l. 84 --><p class='noindent'>Pixman[<a id='x1-3001'></a><a href='#cite.0@pixman'>1</a>] is a low-level pixel manipulation library used
+      by various graphics stacks, including the X server and
+      Cairo. It features architecture-specific SIMD backends for
+      optimized performance on different platforms such as x86
+      (MMX/SSE2, SSSE3), ARM (NEON), MIPS (DSPr2),
+      PowerPC (AltiVec/VMX), and LoongArch (MMI).
+      SIMD (Single Instruction, Multiple Data) is a parallel
+      computing technique that accelerates processing by
+      performing the same operation on multiple data points
+      simultaneously.
+    </p><!-- l. 86 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-4000'></a>GStreamer ORC</h4>
+   <!-- l. 88 --><p class='noindent'>GStreamer ORC (The OIL Runtime Compiler)[<a id='x1-4001'></a><a href='#cite.0@orc'>2</a>] is a
+      library that dynamically generates vectorized code
+      from ORC bytecode, enhancing media processing
+      performance. Similar to Pixman, it contains multiple
+
+
+      architecture-specific backends.
+    </p><!-- l. 90 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-5000'></a>Opus</h4>
+<!-- l. 92 --><p class='noindent'>Opus[<a id='x1-5001'></a><a href='#cite.0@rfc6716'>3</a>] is a widely adopted audio codec designed for
+      high-quality, low-latency voice and music streaming. Its
+      architecture-specific optimizations, providing benefits in
+      the processing speed and energy efficiency, make it a
+      prime candidate for RISC-V enablement, particularly
+      with RVV support.
+    </p><!-- l. 94 --><p class='noindent'>
+    </p>
+    <h3 class='sectionHead'><a id='x1-6000'></a>Creating the CI Workflow</h3>
+<!-- l. 96 --><p class='noindent'>FDO’s GitLab CI infrastructure is limited to x86 and
+      ARM, as it relies on donated computing resources. To
+      enable RISC-V testing without adding significant
+      maintenance overhead, we implemented a solution using
+      Docker-based GitLab runners with QEMU user-mode
+      emulation[<a id='x1-6001'></a><a href='#cite.0@dockerqemu'>4</a>].
+    </p><!-- l. 98 --><p class='indent'>  Our primary objectives were to: </p>
+    <ul class='itemize1'>
+      <li class='itemize'>Provide        CI        coverage        for        all
+        supported architectures (including basic support
+        for Windows using Wine).
+      </li>
+      <li class='itemize'>Use native ARM runners where applicable.
+      </li>
+      <li class='itemize'>Build the libraries with both GNU and LLVM
+        toolchains.
+      </li>
+      <li class='itemize'>Execute tests for all SIMD backends.
+      </li>
+      <li class='itemize'>Generate a consolidated coverage report.</li></ul>
+<!-- l. 107 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-7000'></a>Docker Image Preparation</h4>
+<!-- l. 109 --><p class='noindent'>We developed reusable GitLab CI templates to build
+      multi-architecture Docker images, leveraging extensive
+      Debian’s cross-architecture support and pre-built base
+      images.
+    </p><!-- l. 111 --><p class='indent'>  To enable comprehensive testing, our images included
+      necessary toolchains (GNU, LLVM), required library
+      dependencies, and tooling for analyzing test results.      </p><!-- l. 113 --><p class='indent'>   Using a multi-stage, composable Docker image
+        approach, we ensured flexibility—allowing projects to
+        either use pre-built CI images (GNU, LLVM, Meson
+        stack) or extend them for project-specific needs (e.g., by
+        installing required system dependencies).
+      </p><!-- l. 115 --><p class='indent'>   Whenever possible, we prioritized native execution to
+        simplify debugging and enable coverage analysis.
+        However, for certain architectures (e.g., big-endian
+        PowerPC 32-bit), cross-compilation was required, in
+        which case we focused solely on correctness verification.
+      </p><!-- l. 117 --><p class='noindent'>
+      </p>
+    <h4 class='subsectionHead'><a id='x1-8000'></a>Build Stage</h4>
+   <!-- l. 119 --><p class='noindent'>Initially, Pixman’s CI workflow only ran tests with the
+      GNU toolchain, leading to overlooked issues in LLVM
+      builds. Architecture-specific code (e.g., with compiler
+      intrinsics) can behave differently between compilers,
+      necessitating dual-toolchain testing. Including both GNU
+      and LLVM in our workflow uncovered several previously
+      unreported LLVM-related bugs, improving the library’s
+      overall reliability.
+    </p><!-- l. 121 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-9000'></a>Test Stage</h4>
+   <!-- l. 123 --><p class='noindent'>The CI workflow executes tests across all supported
+      architecture-specific backends. For instance, x86 builds
+      reuse binaries across MMX, SSE2, and SSSE3 SIMD
+      implementations allowing for running the tests in
+      parallel.
+    </p><!-- l. 125 --><p class='indent'>   Similarly, for RVV, we tested multiple vector register
+      lengths (VLENs) to identify configuration-specific issues.
+      Since development hardware we used supported a VLEN
+      of 256, automated testing of various configurations
+      ensured early discovery of potential issues for future
+      RISC-V targets.
+    </p><!-- l. 127 --><p class='noindent'>
+    </p>
+    <h4 class='subsectionHead'><a id='x1-10000'></a>Summary Stage</h4>
+   <!-- l. 129 --><p class='noindent'>Native execution simplified coverage analysis, but each
+      test run generated separate reports. Manually reviewing
+      over 40 reports was impractical, so we used <span class='ecti-1000'>gcovr</span>[<a id='x1-10001'></a><a href='#cite.0@gcovr'>5</a>] to
+      merge them into a unified summary, producing both
+      human-readable and machine-consumable reports for
+      GitLab’s CI system[<a id='x1-10002'></a><a href='#cite.0@gitlab-cov'>6</a>].
+    </p><!-- l. 131 --><p class='noindent'>
+    </p>
+
+
+    <h3 class='sectionHead'><a id='x1-11000'></a>Impact and Future Work</h3>
+<!-- l. 133 --><p class='noindent'>Our methodology has already uncovered early-stage bugs
+      in Pixman’s RVV implementation by testing across
+      various VLEN configurations. The same approach will be
+      extended to GStreamer Orc to enhance RISC-V support
+      in other media processing workloads.
+    </p><!-- l. 135 --><p class='indent'>  For Opus, automated RISC-V testing significantly
+      accelerates development, reducing reliance on manual
+      hardware validation. Our work establishes a scalable
+      model for integrating RISC-V into CI workflows.
+    </p><!-- l. 137 --><p class='indent'>  Looking ahead, we plan to expand our methodology to
+      additional projects and collaborate with open-source
+      communities to further enhance RISC-V CI capabilities.
+    </p><!-- l. 139 --><p class='indent'>  It’s worth to mention the Cloud-V CI/CD system[<a id='x1-11001'></a><a href='#cite.0@cloudv'>7</a>],
+      which provides real, hardware RISC-V targets for use
+      in CI/CD workflows. This looks like an interesting
+      option for the future, in case a project requires, e.g.,
+      performance measurement in CI, which cannot be
+      provided in QEMU environment.
+    </p><!-- l. 141 --><p class='noindent'>
+    </p>
+    <h3 class='sectionHead'><a id='x1-12000'></a>Conclusion</h3>
+<!-- l. 143 --><p class='noindent'>By enabling RISC-V CI in upstream open-source
+      projects, we have addressed one of the key barriers to
+      RISC-V adoption. Our approach is generic enough that it
+      can be reused in other Freedesktop.org projects and in
+      external GitLab instances used by other open source
+      projects. This work ensures that maintainers can
+      validate RISC-V contributions without requiring
+      dedicated hardware, making it easier for developers
+      to contribute RISC-V optimizations. This success
+      story demonstrates how strategic CI integration can
+      accelerate the growth of RISC-V within the open-source
+      ecosystem.
+    </p><!-- l. 150 --><p class='noindent'>
+    </p>
+    <h3 class='sectionHead'><a id='x1-13000'></a>References</h3>
+<!-- l. 150 --><p class='noindent'>
+    </p><dl class='thebibliography'><dt class='thebibliography' id='X0-pixman'>
+      <span class='ecrm-0800'>[1]</span>  </dt><dd class='thebibliography' id='bib-1'>
+    <!-- l. 150 --><p class='noindent'><a id='cite.0@pixman'></a><span class='ecrm-0800'>Freedesktop.org. </span><span class='ecti-0800'>Pixman</span><span class='ecrm-0800'>. </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>: </span><a class='url' href='https://pixman.org/'><span class='ectt-0800'>https://pixman.org/</span></a><span class='ecrm-0800'>.</span>
+        </p></dd><dt class='thebibliography' id='X0-orc'>
+          <span class='ecrm-0800'>[2]</span>  </dt><dd class='thebibliography' id='bib-2'>
+    <!-- l. 150 --><p class='noindent'><a id='cite.0@orc'></a><span class='ecrm-0800'>Freedesktop.org.         </span><span class='ecti-0800'>GStreamer        ORC</span><span class='ecrm-0800'>.         </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>:</span>
+              <a class='url' href='https://gitlab.freedesktop.org/gstreamer/orc'><span class='ectt-0800'>https://gitlab.freedesktop.org/gstreamer/orc</span></a><span class='ecrm-0800'>.</span>
+            </p></dd><dt class='thebibliography' id='X0-rfc6716'>
+              <span class='ecrm-0800'>[3]</span>  </dt><dd class='thebibliography' id='bib-3'>
+    <!-- l. 150 --><p class='noindent'><a id='cite.0@rfc6716'></a><span class='ecrm-0800'>Jean-Marc Valin, Koen Vos, and Timothy B. Terriberry.
+                </span><span class='ecti-0800'>Definition         of         the         Opus         Audio
+                  Codec</span><span class='ecrm-0800'>. RFC 6716. Sept. 2012. </span><span class='eccc0800-'><span class='small-caps'>doi</span></span><span class='ecrm-0800'>: </span><a href='https://doi.org/10.17487/RFC6716'><span class='ectt-0800'>10.17487/RFC6716</span></a><span class='ecrm-0800'>.
+                  </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>: </span><a class='url' href='https://www.rfc-editor.org/info/rfc6716'><span class='ectt-0800'>https://www.rfc-editor.org/info/rfc6716</span></a><span class='ecrm-0800'>.</span>
+                </p></dd><dt class='thebibliography' id='X0-dockerqemu'>
+                  <span class='ecrm-0800'>[4]</span>    </dt><dd class='thebibliography' id='bib-4'>
+          <!-- l. 150 --><p class='noindent'><a id='cite.0@dockerqemu'></a><span class='ecrm-0800'>Docker    Inc.    </span><span class='ecti-0800'>Docker:   Multi-platform   builds</span><span class='ecrm-0800'>.    </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>:</span>
+                      <a class='url' href='https://docs.docker.com/build/building/multi-platform/'><span class='ectt-0800'>https://docs.docker.com/build/building/multi-platform/</span></a><span class='ecrm-0800'>.</span>
+                    </p></dd><dt class='thebibliography' id='X0-gcovr'>
+                      <span class='ecrm-0800'>[5]</span>    </dt><dd class='thebibliography' id='bib-5'>
+          <!-- l. 150 --><p class='noindent'><a id='cite.0@gcovr'></a><span class='ecrm-0800'>Lukas  Atkinson  and  Michael  Förderer.  </span><span class='ecti-0800'>gcovr</span><span class='ecrm-0800'>.  </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>:</span>
+                          <a class='url' href='https://www.gcovr.com/en/stable/index.html'><span class='ectt-0800'>https://www.gcovr.com/en/stable/index.html</span></a><span class='ecrm-0800'>.</span>
+                        </p></dd><dt class='thebibliography' id='X0-gitlab-cov'>
+                          <span class='ecrm-0800'>[6]</span>    </dt><dd class='thebibliography' id='bib-6'>
+          <!-- l. 150 --><p class='noindent'><a id='cite.0@gitlab-cov'></a><span class='ecrm-0800'>GitLab  Inc.  </span><span class='ecti-0800'>GitLab:  Test  coverage  visualization</span><span class='ecrm-0800'>.  </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>:</span>
+                              <a class='url' href='https://docs.gitlab.com/ee/ci/testing/test_coverage_visualization/'><span class='ectt-0800'>https://docs.gitlab.com/ee/ci/testing/test_coverage_visualization/</span></a><span class='ecrm-0800'>.</span>
+                            </p></dd><dt class='thebibliography' id='X0-cloudv'>
+                              <span class='ecrm-0800'>[7]</span>    </dt><dd class='thebibliography' id='bib-7'>
+          <!-- l. 150 --><p class='noindent'><a id='cite.0@cloudv'></a><span class='ecrm-0800'>10xEngineers.               </span><span class='ecti-0800'>Cloud-V:             Continuous
+                                  Deployment and Continuous Integration (CI/CD)</span><span class='ecrm-0800'>. </span><span class='eccc0800-'><span class='small-caps'>url</span></span><span class='ecrm-0800'>:</span>
+                                  <a class='url' href='https://cloud-v.co/ci-cd'><span class='ectt-0800'>https://cloud-v.co/ci-cd</span></a><span class='ecrm-0800'>.</span></p></dd></dl>
+
+  </body>
+</html>
